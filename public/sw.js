@@ -1,5 +1,106 @@
-const CACHE_NAME = 'pwa-daniel-v5';
-const RUNTIME_CACHE = 'runtime-cache-v5';
+const CACHE_NAME = 'pwa-daniel-v6';
+const RUNTIME_CACHE = 'runtime-cache-v6';
+
+// Base de la API (puede ser actualizada vía postMessage desde la app)
+let API_BASE_URL = 'http://localhost:3001';
+
+// IndexedDB  
+const IDB_NAME = 'pwa-cart-db';
+const IDB_VERSION = 1;
+const IDB_STORE = 'cartQueue';
+
+function openCartDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(IDB_NAME, IDB_VERSION);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: 'id', autoIncrement: true });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function idbAddCartRecord(record) {
+  const db = await openCartDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.objectStore(IDB_STORE).add({ ...record, createdAt: Date.now() });
+  });
+}
+
+async function idbGetAllCartRecords() {
+  const db = await openCartDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbClearCartStore() {
+  const db = await openCartDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const req = tx.objectStore(IDB_STORE).clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Procesar la cola del carrito cuando haya internet
+async function processCartQueue() {
+  try {
+    const items = await idbGetAllCartRecords();
+    if (!items.length) {
+      console.log('[SW] 🧺 Cola vacía, nada que sincronizar');
+      return;
+    }
+
+    if (self.navigator && self.navigator.onLine === false) {
+      console.log('[SW] 📡 Sin conexión, no se procesa la cola');
+      return;
+    }
+
+    // Construir endpoint a partir de la base de la API
+    let endpoint = '/api/cart/sync';
+    try {
+      endpoint = new URL('/api/cart/sync', API_BASE_URL).toString();
+    } catch (_) {
+      endpoint = `${API_BASE_URL.replace(/\/$/, '')}/api/cart/sync`;
+    }
+
+    console.log('[SW] 🔄 Enviando cola del carrito:', items.length, 'elementos');
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+
+    if (!res.ok) {
+      throw new Error('Respuesta no OK al sincronizar: ' + res.status);
+    }
+
+    await idbClearCartStore();
+    console.log('[SW] ✅ Cola sincronizada y limpiada');
+
+    // Notificar a los clientes que la sincronización terminó
+    const allClients = await self.clients.matchAll({ includeUncontrolled: true });
+    allClients.forEach((client) => {
+      client.postMessage({ type: 'CART_SYNCED' });
+    });
+  } catch (err) {
+    console.warn('[SW] ⚠️ No se pudo sincronizar la cola:', err && err.message);
+    // Se reintentará en el próximo evento 'sync' o cuando vuelva el internet
+  }
+}
 
 // URLs críticas para cachear
 const PRECACHE_URLS = [
@@ -7,8 +108,8 @@ const PRECACHE_URLS = [
   '/index.html',
   '/manifest.json',
   '/favicon.ico',
-  '/assets/index-B9W2cp9s.js',
-  '/assets/index-KyHEIu4m.css',
+  '/assets/index.js',
+  '/assets/index.css',
   '/iphone.png',
   '/samsung.webp',
   '/google.png',
@@ -250,15 +351,52 @@ self.addEventListener('message', (event) => {
       });
     });
   }
+
+  if (event.data && event.data.type === 'QUEUE_CART_ITEM') {
+    const payload = event.data.payload || {};
+    const record = {
+      action: payload.action || 'add',
+      product: payload.product || null,
+      quantity: payload.quantity || 1
+    };
+    idbAddCartRecord(record)
+      .then(() => {
+        console.log('[SW] 🧾 Item agregado a la cola offline');
+      })
+      .catch((e) => console.warn('[SW] ❌ Error guardando en IDB:', e && e.message));
+  }
+
+  if (event.data && event.data.type === 'SET_API_BASE_URL') {
+    const base = event.data.baseUrl;
+    if (typeof base === 'string' && base.length > 0) {
+      API_BASE_URL = base;
+      console.log('[SW] 🔧 API_BASE_URL seteada a:', API_BASE_URL);
+    }
+  }
+
+  if (event.data && event.data.type === 'PROCESS_CART_QUEUE') {
+    event.waitUntil(processCartQueue());
+  }
 });
 
 // Detectar cambios en el estado de la conexión
 self.addEventListener('online', () => {
   console.log('[SW] 🌐 Conexión restaurada');
+  // Fallback si no hay Background Sync
+  processCartQueue();
 });
 
 self.addEventListener('offline', () => {
   console.log('[SW] 📡 Sin conexión');
+});
+
+// Background Sync para subir el carrito cuando vuelva internet
+self.addEventListener('sync', (event) => {
+  if (!event.tag) return;
+  if (event.tag === 'sync-cart') {
+    console.log('[SW] 🔁 Evento Background Sync: sync-cart');
+    event.waitUntil(processCartQueue());
+  }
 });
 
 // Log cuando el SW se inicia
