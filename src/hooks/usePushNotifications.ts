@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const BACKEND_URL = 'http://localhost:3001';
+const BACKEND_URL = 'https://pwa-back-35rf.onrender.com';
 
 // 🔑 Clave pública VAPID específica para pwa_back
 const VAPID_PUBLIC_KEY = "BA0QfSuyhYW-m1x5YfN26hbr2wC1J5SLzT3_mRI3d0BOreMLoJN7bktyihkny_gh2XQ0uK9C7yRsOY7dWoI_UYE";
