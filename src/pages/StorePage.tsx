@@ -290,7 +290,7 @@ export default function StorePage() {
         product.name,
         formatPrice(product.price),
         newCartCount,
-        formatPrice(newCartTotal)
+        newCartTotal
       );
     }
 
