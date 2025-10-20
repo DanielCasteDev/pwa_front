@@ -2,7 +2,7 @@ const CACHE_NAME = 'pwa-daniel-v6';
 const RUNTIME_CACHE = 'runtime-cache-v6';
 
 // Base de la API (puede ser actualizada vía postMessage desde la app)
-let API_BASE_URL = 'http://localhost:3001';
+let API_BASE_URL = 'https://pwa-back-35rf.onrender.com';
 
 // IndexedDB  
 const IDB_NAME = 'pwa-cart-db';
