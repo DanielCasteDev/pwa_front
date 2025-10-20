@@ -399,5 +399,79 @@ self.addEventListener('sync', (event) => {
   }
 });
 
+// 🔔 Manejar notificaciones push
+self.addEventListener('push', (event) => {
+  console.log('[SW] 🔔 Push recibido:', event);
+
+  const data = event.data ? event.data.json() : {};
+  const title = data.title || 'TechStore Notificación';
+  const options = {
+    body: data.body || 'Tienes una nueva notificación',
+    icon: data.icon || '/favicon.ico',
+    badge: data.badge || '/favicon.ico',
+    data: data.data || {},
+    actions: [
+      {
+        action: 'view',
+        title: 'Ver',
+        icon: '/favicon.ico'
+      },
+      {
+        action: 'close',
+        title: 'Cerrar',
+        icon: '/favicon.ico'
+      }
+    ],
+    requireInteraction: true,
+    vibrate: [200, 100, 200]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
+// 🔔 Manejar clics en notificaciones
+self.addEventListener('notificationclick', (event) => {
+  console.log('[SW] 🔔 Notificación clickeada:', event);
+  
+  event.notification.close();
+
+  if (event.action === 'close') {
+    return;
+  }
+
+  // Si es una notificación de carrito, abrir el carrito directamente
+  const notificationData = event.notification.data;
+  let targetUrl = '/';
+  
+  if (notificationData && notificationData.type === 'cart') {
+    targetUrl = '/?openCart=true';
+    console.log('[SW] 🛒 Abriendo carrito desde notificación');
+  }
+
+  // Abrir o enfocar la aplicación
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        // Si ya hay una ventana abierta, enfocarla y enviar mensaje
+        for (const client of clientList) {
+          if (client.url === self.location.origin && 'focus' in client) {
+            client.focus();
+            // Enviar mensaje para abrir el carrito si es necesario
+            if (notificationData && notificationData.type === 'cart') {
+              client.postMessage({ type: 'OPEN_CART' });
+            }
+            return;
+          }
+        }
+        // Si no hay ventana abierta, abrir una nueva
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+      })
+  );
+});
+
 // Log cuando el SW se inicia
 console.log('[SW] 🎬 Service Worker cargado');

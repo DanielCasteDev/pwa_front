@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 
 interface Product {
   id: number;
@@ -27,6 +28,7 @@ export default function StorePage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const { isOffline } = useNetworkStatus();
+  const { isSubscribed, isLoading: pushLoading, subscribe, unsubscribe, sendCartNotification } = usePushNotifications();
   const lastNetworkStatusRef = useRef<boolean | null>(null);
   const isInitialLoadRef = useRef(true);
 
@@ -189,6 +191,19 @@ export default function StorePage() {
     if (savedCart) {
       setCart(JSON.parse(savedCart));
     }
+
+    // Escuchar mensajes del service worker para abrir el carrito
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'OPEN_CART') {
+        setShowCart(true);
+      }
+    };
+
+    navigator.serviceWorker?.addEventListener('message', handleMessage);
+    
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', handleMessage);
+    };
   }, []);
 
   useEffect(() => {
@@ -251,14 +266,32 @@ export default function StorePage() {
 
   const addToCart = (product: Product) => {
     const existingItem = cart.find(item => item.id === product.id);
+    let newCart;
+    
     if (existingItem) {
-      setCart(cart.map(item => 
+      newCart = cart.map(item => 
         item.id === product.id 
           ? { ...item, quantity: item.quantity + 1 }
           : item
-      ));
+      );
     } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
+      newCart = [...cart, { ...product, quantity: 1 }];
+    }
+    
+    setCart(newCart);
+
+    // Calcular nuevos totales para la notificación
+    const newCartCount = newCart.reduce((sum, item) => sum + item.quantity, 0);
+    const newCartTotal = newCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    // Enviar notificación push si está suscrito
+    if (isSubscribed) {
+      sendCartNotification(
+        product.name,
+        formatPrice(product.price),
+        newCartCount,
+        formatPrice(newCartTotal)
+      );
     }
 
     // Encolar en SW si estamos offline para sincronizarlo luego
@@ -362,6 +395,29 @@ export default function StorePage() {
                   </h1>
                   <p className="text-gray-400 text-sm font-medium">Premium Electronics</p>
                 </div>
+              </div>
+
+              {/* Notificaciones Push */}
+              <div className="flex items-center space-x-3">
+                {!isSubscribed ? (
+                  <button
+                    onClick={subscribe}
+                    disabled={pushLoading}
+                    className="flex items-center space-x-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-xl border border-green-500/30 px-4 py-3 rounded-xl font-medium hover:from-green-500/30 hover:to-emerald-500/30 transition-all duration-300"
+                  >
+                    <span className="text-lg">🔔</span>
+                    <span className="font-semibold">{pushLoading ? 'Suscribiendo...' : 'Notificaciones'}</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={unsubscribe}
+                    disabled={pushLoading}
+                    className="flex items-center space-x-2 bg-gradient-to-r from-red-500/20 to-pink-500/20 backdrop-blur-xl border border-red-500/30 px-4 py-3 rounded-xl font-medium hover:from-red-500/30 hover:to-pink-500/30 transition-all duration-300"
+                  >
+                    <span className="text-lg">🔕</span>
+                    <span className="font-semibold">Desuscribir</span>
+                  </button>
+                )}
               </div>
 
               {/* Carrito */}
