@@ -1,7 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, type ReactNode } from 'react';
+import { API_URL } from './api';
 
-export const API_BASE_URL: string = import.meta.env?.VITE_API_BASE_URL || 'https://pwa-back-35rf.onrender.com';
+export const API_BASE_URL: string = import.meta.env?.VITE_API_BASE_URL || API_URL;
 
 export type ApiConfig = { baseUrl: string };
 

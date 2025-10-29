@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
+import { API_URL } from '../config/api';
 
-const BACKEND_URL = 'https://pwa-back-35rf.onrender.com';
+const BACKEND_URL = API_URL;
 
 // 🔑 Clave pública VAPID específica para pwa_back
 const VAPID_PUBLIC_KEY = "BA0QfSuyhYW-m1x5YfN26hbr2wC1J5SLzT3_mRI3d0BOreMLoJN7bktyihkny_gh2XQ0uK9C7yRsOY7dWoI_UYE";
 
-export const usePushNotifications = () => {
+interface UsePushNotificationsProps {
+  token?: string | null;
+}
+
+export const usePushNotifications = ({ token }: UsePushNotificationsProps = {}) => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,12 +124,20 @@ export const usePushNotifications = () => {
         }
       }
 
-      // Enviar al servidor
+      // Enviar al servidor con token de autenticación
       console.log('📤 Enviando suscripción al servidor...');
+      
+      if (!token) {
+        throw new Error('No hay token de autenticación');
+      }
+      
       const response = await fetch(`${BACKEND_URL}/api/notifications/subscribe`, {
         method: 'POST',
         body: JSON.stringify(subscription),
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
       });
 
       if (response.ok) {
@@ -182,6 +195,10 @@ export const usePushNotifications = () => {
     try {
       console.log('🚀 Enviando notificación de prueba...');
       
+      if (!token) {
+        throw new Error('No hay token de autenticación');
+      }
+      
       const res = await fetch(`${BACKEND_URL}/api/notifications/send-notification`, {
         method: 'POST',
         body: JSON.stringify({
@@ -194,7 +211,10 @@ export const usePushNotifications = () => {
             timestamp: Date.now()
           }
         }),
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
       });
 
       if (res.ok) {
@@ -218,6 +238,11 @@ export const usePushNotifications = () => {
     try {
       console.log('🛒 Enviando notificación de carrito...');
       
+      if (!token) {
+        console.warn('⚠️ No hay token de autenticación, omitiendo notificación');
+        return;
+      }
+      
       const res = await fetch(`${BACKEND_URL}/api/notifications/cart-notification`, {
         method: 'POST',
         body: JSON.stringify({
@@ -226,7 +251,10 @@ export const usePushNotifications = () => {
           cartCount,
           cartTotal
         }),
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
       });
 
       if (res.ok) {

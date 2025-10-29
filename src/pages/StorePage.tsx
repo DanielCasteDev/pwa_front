@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { useAuth } from '../context/AuthContext';
+import LoginModal from '../components/LoginModal';
 
 interface Product {
   id: number;
@@ -27,8 +29,10 @@ export default function StorePage() {
   const [showCart, setShowCart] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const { isOffline } = useNetworkStatus();
-  const { isSubscribed, isLoading: pushLoading, subscribe, unsubscribe, sendCartNotification } = usePushNotifications();
+  const { user, isAuthenticated, token, logout } = useAuth();
+  const { isSubscribed, isLoading: pushLoading, subscribe, unsubscribe, sendCartNotification } = usePushNotifications({ token });
   const lastNetworkStatusRef = useRef<boolean | null>(null);
   const isInitialLoadRef = useRef(true);
 
@@ -397,26 +401,78 @@ export default function StorePage() {
                 </div>
               </div>
 
-              {/* Notificaciones Push */}
+              {/* Usuario y Notificaciones Push */}
               <div className="flex items-center space-x-3">
-                {!isSubscribed ? (
-                  <button
-                    onClick={subscribe}
-                    disabled={pushLoading}
-                    className="flex items-center space-x-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-xl border border-green-500/30 px-4 py-3 rounded-xl font-medium hover:from-green-500/30 hover:to-emerald-500/30 transition-all duration-300"
-                  >
-                    <span className="text-lg">🔔</span>
-                    <span className="font-semibold">{pushLoading ? 'Suscribiendo...' : 'Notificaciones'}</span>
-                  </button>
+                {isAuthenticated ? (
+                  <>
+                    {/* Información del usuario */}
+                    <div className="flex items-center space-x-2 bg-white/5 backdrop-blur-xl border border-white/10 px-4 py-3 rounded-xl">
+                      <span className="text-lg">👤</span>
+                      <span className="font-semibold text-sm text-gray-300">{user?.name}</span>
+                    </div>
+
+                    {/* Botón de notificaciones */}
+                    {!isSubscribed ? (
+                      <button
+                        onClick={subscribe}
+                        disabled={pushLoading}
+                        className="flex items-center space-x-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-xl border border-green-500/30 px-4 py-3 rounded-xl font-medium hover:from-green-500/30 hover:to-emerald-500/30 transition-all duration-300"
+                      >
+                        <span className="text-lg">🔔</span>
+                        <span className="font-semibold">{pushLoading ? 'Suscribiendo...' : 'Notificaciones'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={unsubscribe}
+                        disabled={pushLoading}
+                        className="flex items-center space-x-2 bg-gradient-to-r from-red-500/20 to-pink-500/20 backdrop-blur-xl border border-red-500/30 px-4 py-3 rounded-xl font-medium hover:from-red-500/30 hover:to-pink-500/30 transition-all duration-300"
+                      >
+                        <span className="text-lg">🔕</span>
+                        <span className="font-semibold">Desuscribir</span>
+                      </button>
+                    )}
+
+                    {/* Botón de logout */}
+                    <button
+                      onClick={logout}
+                      className="flex items-center space-x-2 bg-white/5 backdrop-blur-xl border border-white/10 px-4 py-3 rounded-xl font-medium hover:bg-white/10 transition-all duration-300"
+                    >
+                      <span className="text-lg">🚪</span>
+                      <span className="font-semibold">Salir</span>
+                    </button>
+                  </>
                 ) : (
-                  <button
-                    onClick={unsubscribe}
-                    disabled={pushLoading}
-                    className="flex items-center space-x-2 bg-gradient-to-r from-red-500/20 to-pink-500/20 backdrop-blur-xl border border-red-500/30 px-4 py-3 rounded-xl font-medium hover:from-red-500/30 hover:to-pink-500/30 transition-all duration-300"
-                  >
-                    <span className="text-lg">🔕</span>
-                    <span className="font-semibold">Desuscribir</span>
-                  </button>
+                  <>
+                    {/* Botón de login */}
+                    <button
+                      onClick={() => setShowLoginModal(true)}
+                      className="flex items-center space-x-2 bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-xl border border-blue-500/30 px-4 py-3 rounded-xl font-medium hover:from-blue-500/30 hover:to-purple-500/30 transition-all duration-300"
+                    >
+                      <span className="text-lg">🔐</span>
+                      <span className="font-semibold">Iniciar Sesión</span>
+                    </button>
+                    
+                    {/* Botón de notificaciones deshabilitado */}
+                    <button
+                      onClick={() => {
+                        toast.info('🔐 Inicia sesión primero', {
+                          description: 'Necesitas estar autenticado para activar las notificaciones',
+                          duration: 3000,
+                          style: {
+                            background: 'rgba(0, 0, 0, 0.9)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            color: '#ffffff',
+                            backdropFilter: 'blur(20px)',
+                          },
+                        });
+                        setShowLoginModal(true);
+                      }}
+                      className="flex items-center space-x-2 bg-gray-500/20 backdrop-blur-xl border border-gray-500/30 px-4 py-3 rounded-xl font-medium opacity-60 cursor-not-allowed"
+                    >
+                      <span className="text-lg">🔔</span>
+                      <span className="font-semibold">Notificaciones</span>
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -837,6 +893,11 @@ export default function StorePage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Modal de Login */}
+        {showLoginModal && (
+          <LoginModal onClose={() => setShowLoginModal(false)} />
         )}
       </div>
       <Toaster richColors />
